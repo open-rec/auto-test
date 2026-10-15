@@ -17,6 +17,32 @@ import checks
 import run
 
 
+class FixtureSampleTests(unittest.TestCase):
+    def test_sample_requires_all_trigger_channels_in_both_modes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            files = {
+                "model/recall/item_cf_i2i.csv": "scene,left_item\nscene_0,missing\nscene_0,valid\n",
+                "model/recall/content_i2i.csv": "scene,left_item\nscene_0,missing\nscene_0,valid\n",
+                "model/recall/item_seq_emb.csv": "scene,item\nscene_0,valid\n",
+                "model/recall/user_cf_u2i.csv": "scene,user\nscene_0,user_0\nscene_0,fixture_user\n",
+                "example/data/test/event.csv": (
+                    "scene,type,user_id,item_id\n"
+                    "scene_0,click,fixture_user,missing\n"
+                    "scene_0,click,fixture_user,valid\n"
+                ),
+            }
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            self.assertEqual(("user_0", "valid"), checks.fixture_sample(root, "cluster"))
+            self.assertEqual(("fixture_user", "valid"), checks.fixture_sample(root, "standalone"))
+            (root / "model/recall/item_seq_emb.csv").write_text("scene,item\n")
+            with self.assertRaisesRegex(RuntimeError, "no fixture sample"):
+                checks.fixture_sample(root, "cluster")
+
+
 class RecommendationTests(unittest.TestCase):
     def setUp(self):
         self.response = {"status": True, "code": 200, "data": {

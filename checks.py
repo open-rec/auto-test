@@ -54,21 +54,25 @@ def validate_recommendation(response, mode):
             require(score is None, f"standalone unexpectedly ranked item: {item}")
 
 
-def fixture_user(workspace, mode):
-    if mode == "cluster":
-        return "user_0"
+def fixture_sample(workspace, mode):
     def rows(path):
         with path.open(newline="") as source:
             return list(csv.DictReader(source))
     left = {row["left_item"] for row in rows(workspace / "model/recall/item_cf_i2i.csv")
             if row["scene"] == "scene_0"}
+    # Explicit triggers keep smoke independent of persisted test click history.
+    for table, key in [("content_i2i", "left_item"), ("item_seq_emb", "item")]:
+        left &= {row[key] for row in rows(workspace / f"model/recall/{table}.csv")
+                 if row["scene"] == "scene_0"}
     users = {row["user"] for row in rows(workspace / "model/recall/user_cf_u2i.csv")
              if row["scene"] == "scene_0"}
     for row in rows(workspace / "example/data/test/event.csv"):
         if (row["scene"] == "scene_0" and row["type"] == "click"
                 and row["item_id"] in left and row["user_id"] in users):
-            return row["user_id"]
-    raise RuntimeError("no suitable standalone fixture user")
+            user = "user_0" if mode == "cluster" else row["user_id"]
+            require(user in users, f"fixture user has no UserCF recall: {user}")
+            return user, row["item_id"]
+    raise RuntimeError("no fixture sample covers all required recall tables")
 
 
 def main():
@@ -88,7 +92,7 @@ def main():
         rank = request(8123, "/health")
         require(rank.get("status") == "success" and (rank.get("data") or {}).get("ready") is True,
                 "rank-engine is not ready")
-    user = fixture_user(args.workspace, args.mode)
+    user, trigger_item = fixture_sample(args.workspace, args.mode)
     key = f"event:{{{user}}}:scene_0:expose"
     backup = key + ":auto-test-backup:" + uuid.uuid4().hex
     existed = docker("exec", "redis", "redis-cli", "EXISTS", key) == "1"
@@ -97,7 +101,7 @@ def main():
     try:
         response = request(13579, "/api/recommend", {
             "requestId": f"auto-test-{uuid.uuid4().hex}",
-            "body": {"scene": "scene_0", "size": 12, "userId": user,
+            "body": {"scene": "scene_0", "size": 12, "userId": user, "itemIds": [trigger_item],
                      "deviceId": "auto-test", "type": "click", "debug": True,
                      "params": {"ab": "default", "query": "item"}}})
         validate_recommendation(response, args.mode)

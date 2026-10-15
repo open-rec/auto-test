@@ -30,9 +30,12 @@ def training_scene(unique_id, push, clients, poll):
                 poll(lambda k=kind, r=row: business(clients["server"].request(f"/api/query/{k}/{r['id']}")), bool)
         # Event timestamps must follow entity snapshots for the point-in-time join.
         eventually(lambda: int(time.time()), lambda stamp: stamp > now, timeout=5)
+        # Distinct times make the temporal holdout deterministic and keep both
+        # labels in its final four samples; equal times tie-break on random IDs.
+        label_start = int(time.time()) + 1
         events = [{"userId": user["id"], "itemId": item["id"], "scene": unique_id,
                    "type": "click" if (u + i) % 2 else "expose", "value": "1",
-                   "time": str(int(time.time())), "traceId": f"{unique_id}_{u}_{i}"}
+                   "time": str(label_start + u * len(items) + i), "traceId": f"{unique_id}_{u}_{i}"}
                   for u, user in enumerate(users) for i, item in enumerate(items)]
         push("event", "INSERT", events)
         for row in users:

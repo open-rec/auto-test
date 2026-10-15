@@ -2,6 +2,8 @@
 
 本文件记录 auto-test 扩展的验证，不修改 [此前发行验收记录](VALIDATION.md) 的历史结论。测试发现的产品失败保持失败，不做 xfail，不用自动重试消除失败记录。
 
+后续产品修复及复测结果见 [产品修复验证记录](VALIDATION_FIXES.md)；下文保留首次实跑历史。
+
 ## 环境与命令
 
 - Python 3.13、pytest 9.1.1、Playwright 1.64.0 / Chromium；沿用 `/tmp/openrec-regression-venv` 和 `/tmp/openrec-regression-browsers`，本次未重新安装系统依赖。
