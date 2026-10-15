@@ -98,3 +98,57 @@ As requested, after the example and auto-test changes above were complete, both 
 This round found no new issues and introduced no product or test code changes. Git HEADs and SHA-256 hashes of all modified workspace files in rec-server, rank-engine, rec-algorithm, rec-console, example, and auto-test were checked before and after execution and matched exactly. Fingerprints are stored in `source-fingerprints.json` in both report directories. Only this record section was appended after validation.
 
 At the end of this round, cluster remained running; standalone applications had been stopped normally during the mode switch, and shared volumes were retained.
+
+
+## Documentation and console directory regression (2026-10-15)
+
+The documentation synchronization updates setup commands, artifact versions and paths, deployment
+mode contracts, Kafka envelopes, ranking fallback semantics, CI coverage, and report references.
+The only application behavior change is rec-console's shared state-directory resolution:
+explicit constructor override, nonempty `REC_CONSOLE_DATA_DIR`, nonempty legacy
+`REC_CONSOLE_DATA`, then `/var/lib/rec-console`. Graph, DAG, model, and recall stores use the same
+resolver. Existing files are not moved automatically.
+
+Validation reused the existing `openrec/rec-console:latest` image and the already installed pytest
+packages through read-only mounts. No new images or dependencies were built or installed for
+these successful runs. The initial host-venv test attempts could not complete because console
+dependencies were missing; those attempts are not counted as passing. Containerized console tests
+finished with **59 passed and 1 skipped**. The skipped case requires an explicitly configured
+Elasticsearch integration endpoint. Eight added cases verify directory precedence, the legacy
+alias, all four stores, and retained history when switching variable names for the same directory.
+
+The full functional suites used existing application images and Java jars. Five changed console
+Python files were mounted read-only over their image paths, preserving the image's built frontend.
+`REC_CONSOLE_DATA_DIR=/var/lib/rec-console` was explicitly set. Cluster ran first against the
+existing local deployment with the console recreated; standalone then reused the retained platform,
+reimported the fixture, and completed health checks and recommendation warmup. No build or pull was
+performed. These are full registered functional regressions, not fresh source-build/startup-script
+acceptance runs. No additional service deadline overrides were introduced.
+
+```bash
+/tmp/openrec-regression-venv/bin/python run.py cluster --suite full \
+  --continue-on-failure --browser-path /tmp/openrec-regression-browsers
+/tmp/openrec-regression-venv/bin/python run.py standalone --suite full \
+  --continue-on-failure --browser-path /tmp/openrec-regression-browsers
+```
+
+| Mode | API | Demo API | Browser UI | Model UI | Total |
+| --- | --- | --- | --- | --- | --- |
+| cluster | 26 passed | 12 passed | 24 passed | 1 passed | 63 passed, 0 skipped, 0 failed |
+| standalone | 12 passed, 14 skipped | 12 passed | 17 passed, 7 skipped | 1 skipped | 41 passed, 22 mode-specific skips, 0 failed |
+
+Cluster also passed all five distribution scripts: entity deletion, feature parity, analytics,
+daily recall, and rank-model lifecycle. Preflight and smoke passed in both modes.
+
+- [Cluster full report](reports/20261015T115808Z-cluster-154f24f1/index.html)
+- [Standalone full report](reports/20261015T121424Z-standalone-33a74191/index.html)
+
+Reviewed source fingerprints remained unchanged through both runs and are recorded in each
+report directory's `source-fingerprints.json`. Only this validation record and its README link
+were updated afterward. Documentation links, shell example syntax, and `git diff --check` passed.
+Changes remain uncommitted on each affected repository's default branch; release branches and
+the published distribution manifest were not modified.
+
+Standalone applications remain running with the console source mounts. Its Web Demo PID is
+registered with the standard standalone stop script. Cluster applications and the Spark streaming
+job were stopped for the mode switch; shared platform services and volumes were retained.

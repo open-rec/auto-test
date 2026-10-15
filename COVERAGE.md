@@ -40,7 +40,7 @@ The following lists implemented test entry points, not a claim that every case h
 ## Coverage gaps
 
 - Independent USER recommendation warmup, the full USER recall lifecycle, and USER ranking model training. Current tests cover only USER DAG configuration and the model target selection page.
-- End-to-end recommendation differences when switching AB experiments in the Web demo. Product failures in experiment activation must be fixed before validating these flows.
+- End-to-end recommendation differences when switching AB experiments in the Web demo. Experiment activation and Runtime listing failures were fixed and their existing API/UI tests pass; recommendation-effect comparisons between variants remain uncovered.
 - Boundary behavior at the 50% viewport threshold, stay-duration precision, and exact exclusion of candidates after negative feedback. Current tests cover browser event reporting and persistence, but do not establish all recommendation effects.
 - Manual trigger buttons for arbitrary DAGs. Actual job execution is covered by distribution scripts and model training.
 - Failure recovery, restart persistence, concurrency, authorization/security, load and latency SLAs, mobile devices, and multiple browsers. Current browser scenarios use desktop Chromium.
