@@ -90,7 +90,10 @@ def main():
                 "rank-engine is not ready")
     user = fixture_user(args.workspace, args.mode)
     key = f"event:{{{user}}}:scene_0:expose"
-    docker("exec", "redis", "redis-cli", "DEL", key)
+    backup = key + ":auto-test-backup:" + uuid.uuid4().hex
+    existed = docker("exec", "redis", "redis-cli", "EXISTS", key) == "1"
+    if existed:
+        docker("exec", "redis", "redis-cli", "RENAME", key, backup)
     try:
         response = request(13579, "/api/recommend", {
             "requestId": f"auto-test-{uuid.uuid4().hex}",
@@ -100,6 +103,8 @@ def main():
         validate_recommendation(response, args.mode)
     finally:
         docker("exec", "redis", "redis-cli", "DEL", key)
+        if existed and docker("exec", "redis", "redis-cli", "EXISTS", backup) == "1":
+            docker("exec", "redis", "redis-cli", "RENAME", backup, key)
     user_id = f"auto_test_{uuid.uuid4().hex}"
     def push(operation):
         result = request(13579, "/api/push/user", {"requestId": user_id + operation,

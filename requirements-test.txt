@@ -1,0 +1,3 @@
+# Versions used by the API/browser regression validation; Python >= 3.10.
+pytest==9.1.1
+playwright==1.64.0

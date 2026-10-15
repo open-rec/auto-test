@@ -2,3 +2,5 @@ reports/
 __pycache__/
 *.pyc
 .run.lock
+.pytest_cache/
+.venv/

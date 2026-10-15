@@ -1,3 +1,5 @@
+> 新增 API / 浏览器框架的实跑记录见 [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md)。以下为原有验收记录。
+
 # 完整功能验收记录
 
 日期：2026-10-15。结论：本仓库当前列出的 cluster 与 standalone 功能验收均已实际执行通过。

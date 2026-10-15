@@ -1,11 +1,16 @@
 import argparse
 import copy
+import contextlib
+import io
+import importlib.util
+import os
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 import checks
@@ -51,9 +56,9 @@ class RunnerTests(unittest.TestCase):
         args = argparse.Namespace(workspace=Path("/workspace with spaces"), mode="cluster",
                                   start=True, local=True, case=None, suite="full")
         cases = run.plan(args)
-        self.assertEqual([name for name, _ in cases], ["startup", "smoke", *run.CLUSTER])
-        self.assertEqual(cases[0][1][-1], "--local")
-        self.assertIn("workspace with spaces", cases[-1][1][-1])
+        self.assertEqual([name for name, _ in cases], ["preflight", "startup", "smoke", *run.CLUSTER, *run.FUNCTIONAL])
+        self.assertEqual(cases[1][1][-1], "--local")
+        self.assertIn("workspace with spaces", cases[3][1][-1])
 
     def test_subprocess_failures_timeouts_and_logs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -78,11 +83,94 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(suite.attrib["skipped"], "1")
             self.assertEqual(json.loads((Path(tmp) / "results.json").read_text()), document)
 
-    def test_invalid_standalone_full_is_rejected(self):
+    def test_standalone_full_can_validate_existing_deployment(self):
         result = subprocess.run([sys.executable, str(run.ROOT / "run.py"), "standalone",
                                  "--suite", "full", "--dry-run"], capture_output=True, text=True)
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("requires --start", result.stderr)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("test_ui.py", result.stdout)
+
+
+    def test_restart_plan_checks_dependencies_before_stopping(self):
+        args = argparse.Namespace(workspace=Path("/workspace"), mode="cluster", start=True,
+                                  restart=True, local=True, case=["ui", "ui"], suite="smoke")
+        names = [name for name, _ in run.plan(args)]
+        self.assertEqual(names, ["preflight", "stop-standalone", "stop-cluster", "startup", "smoke", "ui"])
+        self.assertIn("--keep-platform", run.plan(args)[2][1])
+
+    def test_test_results_preserve_fixture_errors_and_skip_reasons(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cases.xml"
+            path.write_text('<testsuites><testsuite><testcase name="cleanup" time="1">'
+                '<error message="restore failed"/></testcase><testcase name="mode">'
+                '<skipped message="cluster only"/></testcase></testsuite></testsuites>')
+            results = run.test_results(path)
+            self.assertEqual([r["status"] for r in results], ["failed", "skipped"])
+            self.assertEqual(results[0]["message"], "restore failed")
+            self.assertEqual(results[1]["message"], "cluster only")
+
+    def test_mode_specific_case_and_local_constraints(self):
+        for arguments in [["standalone", "--case", "rank-model"], ["cluster", "--local"],
+                          ["cluster", "--projection-timeout", "0"]]:
+            with self.subTest(arguments=arguments):
+                result = subprocess.run([sys.executable, str(run.ROOT / "run.py"), *arguments,
+                    "--dry-run"], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2)
+
+    def test_preflight_failure_prevents_startup_and_mutations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            argv = ["run.py", "cluster", "--start", "--local", "--suite", "api", "--output", tmp]
+            with patch.object(sys, "argv", argv), patch.object(run, "ROOT", root), \
+                 patch.object(run, "metadata", return_value={}), \
+                 patch.object(run, "execute", return_value=("failed", 0, "missing dependency")) as execute, \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(run.main(), 1)
+            self.assertEqual(execute.call_count, 1)
+            document = json.loads(next(root.glob("*/results.json")).read_text())
+            self.assertEqual(document["results"][0]["name"], "preflight")
+            self.assertTrue(all(r["status"] == "skipped" for r in document["results"][1:]))
+
+    def test_cleanup_failure_blocks_continue_on_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            def execute(command, cwd, logfile, timeout):
+                if logfile.stem == "api":
+                    (logfile.parent / "api-junit.xml").write_text(
+                        '<testsuites><testsuite errors="0"><testcase name="restore">'
+                        '<properties><property name="cleanup_failed" value="true"/></properties>'
+                        '<failure message="restore failed"/></testcase></testsuite></testsuites>')
+                    return "failed", 0, "exit code 1"
+                return "passed", 0, "exit code 0"
+            argv = ["run.py", "standalone", "--suite", "api", "--continue-on-failure", "--output", tmp]
+            with patch.object(sys, "argv", argv), patch.object(run, "ROOT", root), \
+                 patch.object(run, "metadata", return_value={}), patch.object(run, "execute", side_effect=execute), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(run.main(), 1)
+            document = json.loads(next(root.glob("*/results.json")).read_text())
+            self.assertEqual(document["results"][-1]["name"], "demo")
+            self.assertEqual(document["results"][-1]["status"], "skipped")
+
+    @unittest.skipUnless(importlib.util.find_spec("pytest"), "optional pytest dependency not installed")
+    def test_pytest_stops_after_cleanup_error_and_exports_property(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "conftest.py").write_text(
+                "from integration.conftest import pytest_runtest_makereport\n")
+            (root / "test_cleanup.py").write_text(
+                "from openrec_test.lifecycle import cleanup_guard\n"
+                "def test_a_restore():\n"
+                "    with cleanup_guard():\n"
+                "        raise ValueError('restore failed')\n"
+                "def test_b_must_not_run():\n"
+                "    raise AssertionError('later mutation ran')\n")
+            result = subprocess.run([sys.executable, "-m", "pytest", str(root), "-q",
+                "--junitxml", str(root / "junit.xml")], cwd=run.ROOT, capture_output=True, text=True,
+                env={**os.environ, "PYTHONPATH": str(run.ROOT)}, timeout=30)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            xml = ET.parse(root / "junit.xml").getroot()
+            self.assertEqual(len(list(xml.iter("testcase"))), 1)
+            self.assertTrue(any(p.get("name") == "cleanup_failed" and p.get("value") == "true"
+                                for p in xml.iter("property")))
 
 
 if __name__ == "__main__":
