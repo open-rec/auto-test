@@ -79,6 +79,17 @@ def test_event_push_and_query(user, clients, push, poll):
         "user_id": user, "scene": "scene_0", "event_type": "click"}), lambda data: item in str(data))
 
 
+def test_user_text_recommendation(clients, user):
+    data = business(clients["server"].request("/api/recommend/user", {
+        "requestId": user, "body": {"userId": user, "scene": "scene_0", "size": 8,
+                                    "debug": True, "params": {"ab": "default", "query": "CN"}}}))
+    results = data["results"]
+    assert 0 < len(results) <= 8, data
+    assert len({result["id"] for result in results}) == len(results), data
+    assert any(node.get("channel") == "user_search" and node.get("status") == "SUCCESS"
+               and node.get("candidateCount", 0) > 0 for node in data["recallDiagnostics"]), data
+
+
 def test_graph_publish_rollback_validation(clients, unique_id):
     api = clients["console"]
     original = api.request("/api/serving-graph")["graph"]
@@ -135,7 +146,7 @@ def test_dag_config_roundtrip(clients, dag):
 
 
 @pytest.mark.cluster
-@pytest.mark.parametrize("algorithm", ["hot", "new", "item-cf-i2i", "content-i2i", "user-cf-u2i", "sparse"])
+@pytest.mark.parametrize("algorithm", ["hot", "new", "item-cf-i2i", "content-i2i", "user-cf-u2i", "item-search", "user-search"])
 def test_recall_catalog(clients, algorithm):
     data = clients["console"].request("/api/recall/releases/" + algorithm)
     assert data["active_indexes"] and data["releases"], data

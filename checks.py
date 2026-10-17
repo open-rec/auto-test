@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-CHANNELS = {"item_cf_i2i", "content_i2i", "user_cf_u2i", "item_seq_emb", "sparse", "hot"}
+CHANNELS = {"item_cf_i2i", "content_i2i", "user_cf_u2i", "item_seq_emb", "item_search", "hot"}
 
 
 def require(condition, message):

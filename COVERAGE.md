@@ -9,6 +9,7 @@ The following lists implemented test entry points, not a claim that every case h
 | Rank Engine item/user scores and invalid target validation | C | api rank_engine_scores_both_targets |
 | rec-server / rank-engine Prometheus metrics | S/C | api prometheus_metrics |
 | Recommendation compatibility / item routes, size, deduplication, rankScore | S/C | api recommendation_routes |
+| USER text recommendation, nonempty results, size, deduplication and successful user_search diagnostics | S/C | api user_text_recommendation |
 | User creation/query/update/deletion and console consistency | S/C | user fixture, api user_update |
 | Item creation/query/update/deletion and console consistency | S/C | api item_lifecycle |
 | Event ingestion and projection, console event queries | S/C | api event_push |
@@ -39,7 +40,7 @@ The following lists implemented test entry points, not a claim that every case h
 
 ## Coverage gaps
 
-- Independent USER recommendation warmup, the full USER recall lifecycle, and USER ranking model training. Current tests cover only USER DAG configuration and the model target selection page.
+- The full USER recall lifecycle and USER ranking model training. Startup now warms ITEM and USER routes together, and API tests cover USER text recommendation; per-channel USER publication and training remain uncovered.
 - End-to-end recommendation differences when switching AB experiments in the Web demo. Experiment activation and Runtime listing failures were fixed and their existing API/UI tests pass; recommendation-effect comparisons between variants remain uncovered.
 - Boundary behavior at the 50% viewport threshold, stay-duration precision, and exact exclusion of candidates after negative feedback. Current tests cover browser event reporting and persistence, but do not establish all recommendation effects.
 - Manual trigger buttons for arbitrary DAGs. Actual job execution is covered by distribution scripts and model training.
