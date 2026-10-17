@@ -58,13 +58,13 @@ def fixture_sample(workspace, mode):
     def rows(path):
         with path.open(newline="") as source:
             return list(csv.DictReader(source))
-    left = {row["left_item"] for row in rows(workspace / "model/recall/item_cf_i2i.csv")
+    left = {row["left_item"] for row in rows(workspace / "model/recall/item/item_cf_i2i.csv")
             if row["scene"] == "scene_0"}
     # Explicit triggers keep smoke independent of persisted test click history.
     for table, key in [("content_i2i", "left_item"), ("item_seq_emb", "item")]:
-        left &= {row[key] for row in rows(workspace / f"model/recall/{table}.csv")
+        left &= {row[key] for row in rows(workspace / f"model/recall/item/{table}.csv")
                  if row["scene"] == "scene_0"}
-    users = {row["user"] for row in rows(workspace / "model/recall/user_cf_u2i.csv")
+    users = {row["user"] for row in rows(workspace / "model/recall/item/user_cf_u2i.csv")
              if row["scene"] == "scene_0"}
     for row in rows(workspace / "example/data/test/event.csv"):
         if (row["scene"] == "scene_0" and row["type"] == "click"

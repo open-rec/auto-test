@@ -22,10 +22,10 @@ class FixtureSampleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             files = {
-                "model/recall/item_cf_i2i.csv": "scene,left_item\nscene_0,missing\nscene_0,valid\n",
-                "model/recall/content_i2i.csv": "scene,left_item\nscene_0,missing\nscene_0,valid\n",
-                "model/recall/item_seq_emb.csv": "scene,item\nscene_0,valid\n",
-                "model/recall/user_cf_u2i.csv": "scene,user\nscene_0,user_0\nscene_0,fixture_user\n",
+                "model/recall/item/item_cf_i2i.csv": "scene,left_item\nscene_0,missing\nscene_0,valid\n",
+                "model/recall/item/content_i2i.csv": "scene,left_item\nscene_0,missing\nscene_0,valid\n",
+                "model/recall/item/item_seq_emb.csv": "scene,item\nscene_0,valid\n",
+                "model/recall/item/user_cf_u2i.csv": "scene,user\nscene_0,user_0\nscene_0,fixture_user\n",
                 "example/data/test/event.csv": (
                     "scene,type,user_id,item_id\n"
                     "scene_0,click,fixture_user,missing\n"
@@ -38,7 +38,7 @@ class FixtureSampleTests(unittest.TestCase):
                 path.write_text(content)
             self.assertEqual(("user_0", "valid"), checks.fixture_sample(root, "cluster"))
             self.assertEqual(("fixture_user", "valid"), checks.fixture_sample(root, "standalone"))
-            (root / "model/recall/item_seq_emb.csv").write_text("scene,item\n")
+            (root / "model/recall/item/item_seq_emb.csv").write_text("scene,item\n")
             with self.assertRaisesRegex(RuntimeError, "no fixture sample"):
                 checks.fixture_sample(root, "cluster")
 
